@@ -50,17 +50,5 @@ A crisp, production-style recruiting dashboard to manage **Jobs**, **Candidates*
 
 ---
 
-## Screenshots
 
-> _Drop screenshots into `/public/` and uncomment these:_
-
-<!--
-![Light](public/screenshot-light.png)
-![Dark](public/screenshot-dark.png)
-![Board](public/screenshot-board.png)
--->
-
----
-
-## Project Structure (important bits)
 
