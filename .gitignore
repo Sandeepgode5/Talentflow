@@ -1,0 +1,21 @@
+# Node / Vite / React / Tailwind
+node_modules/
+dist/
+build/
+.cache/
+*.log
+*.local
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# OS / editor junk
+.DS_Store
+*.swp
+.vscode/*
+!.vscode/extensions.json
+
+# MSW service worker is fine to commit if it lives in /public/
+# (do NOT ignore public/mockServiceWorker.js)
