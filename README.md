@@ -1,73 +1,66 @@
-# React + TypeScript + Vite
+# TalentFlow — Recruiting Ops Dashboard (React + TS + Vite)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A crisp, production-style recruiting dashboard to manage **Jobs**, **Candidates**, and **Assessments** with:
+- **Dark/Light mode** (persistent, instant toggle)
+- **Kanban board** for candidates with drag & drop
+- **Optimistic updates** + caching via TanStack Query
+- **CSV export** for jobs & candidates
+- **Keyboard shortcuts** for speed
+- **Mock API** backed by **MSW** (no backend required)
 
-Currently, two official plugins are available:
+> Live Demo: _add link after deploy_  
+> Repo: https://github.com/Sandeepgode5/Talentflow
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+---
 
-## React Compiler
+## ✨ Highlights (What a reviewer will notice)
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- **Modern UX**: soft glassy panels, subtle shadows, accessible colors in both themes.
+- **Real-app flows**: list → detail → related items (e.g., Job → recent Assessments).
+- **Performance**: optimistic updates, query invalidations, virtualizable lists, draggable reordering.
+- **Robustness**: error boundaries, toasts, skeletons, retry buttons.
+- **Zero-setup backend**: MSW intercepts `/api/*` with in-memory data + seeds.
 
-## Expanding the ESLint configuration
+---
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## Features
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+- **Jobs**
+  - Search, status/tag filters, pagination
+  - Drag-and-drop reordering (hello-pangea/dnd)
+  - **Export CSV** of the current results
+  - Detail page with edit + recent assessments
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+- **Candidates**
+  - Large list with search + stage filter
+  - Inline stage change (optimistic)
+  - Kanban/Board view: cross-stage move & reorder
+  - Detail page with editable profile, notes, and **Send Assessment**
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+- **Assessments**
+  - List & Detail (title, status, schedule)
+  - Create from Candidate or Job
+  - Clickable titles / deep linking
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+- **Global**
+  - **Dark/Light theme** with persistent preference  
+  - **Header counters** that auto-refresh (open jobs, total candidates, pending assessments)
+  - **Keyboard Shortcuts**: `?` help, `n` new, `e` export  
+  - **ErrorBoundary** + page skeletons + consistent toasts
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+---
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+## Screenshots
+
+> _Drop screenshots into `/public/` and uncomment these:_
+
+<!--
+![Light](public/screenshot-light.png)
+![Dark](public/screenshot-dark.png)
+![Board](public/screenshot-board.png)
+-->
+
+---
+
+## Project Structure (important bits)
+
