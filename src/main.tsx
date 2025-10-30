@@ -1,5 +1,6 @@
 // src/main.tsx
 import "./bootstrap";
+import { bootstrapReady } from "./bootstrap";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
@@ -12,6 +13,7 @@ import { getInitialTheme, applyTheme } from "./lib/theme";
 applyTheme(getInitialTheme()); // ← runs before React to avoid light/dark flash
 
 const queryClient = new QueryClient();
+await bootstrapReady;
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

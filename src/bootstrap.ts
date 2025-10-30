@@ -1,15 +1,15 @@
 // src/bootstrap.ts
-// Opens IndexedDB, runs seeders, then boots MSW (both dev and prod for demo).
+// Opens IndexedDB, runs seeders, then boots MSW (needed in prod demo too).
 
 import * as DB from "./db";
 
-(async function start() {
-  // Open DB (Dexie) first
+export const bootstrapReady: Promise<void> = (async function start() {
+  // 1) Open DB
   if ((DB as any)?.db?.open) {
     await (DB as any).db.open();
   }
 
-  // Seed: candidates → jobs → assessments
+  // 2) Seed in order: candidates → jobs → assessments
   const seeders: Array<() => Promise<unknown>> = [];
   if (typeof (DB as any).seedCandidatesIfEmpty === "function") {
     seeders.push((DB as any).seedCandidatesIfEmpty);
@@ -22,10 +22,13 @@ import * as DB from "./db";
   }
   for (const seed of seeders) await seed();
 
-  // IMPORTANT: start MSW in production too (no real API on Netlify)
+  // 3) Start MSW (also in production; Netlify has no real API)
   const { worker } = await import("./mocks/browser");
   await worker.start({
     serviceWorker: { url: "/mockServiceWorker.js" },
     onUnhandledRequest: "bypass",
   });
 })();
+
+// Keep side effect so existing `import "./bootstrap"` still runs it
+void bootstrapReady;

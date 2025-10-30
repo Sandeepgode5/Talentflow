@@ -56,34 +56,15 @@ function pick<T>(arr: readonly T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 function nameFromSeed(i: number) {
-  const first = [
-    "Alex",
-    "Taylor",
-    "Jordan",
-    "Casey",
-    "Morgan",
-    "Sam",
-    "Riley",
-    "Jamie",
-    "Avery",
-    "Quinn",
-  ];
-  const last = [
-    "Lee",
-    "Patel",
-    "Garcia",
-    "Nguyen",
-    "Kim",
-    "Lopez",
-    "Brown",
-    "Khan",
-    "Singh",
-    "Chen",
-  ];
+  const first = ["Alex","Taylor","Jordan","Casey","Morgan","Sam","Riley","Jamie","Avery","Quinn"];
+  const last  = ["Lee","Patel","Garcia","Nguyen","Kim","Lopez","Brown","Khan","Singh","Chen"];
   return `${first[i % first.length]} ${last[i % last.length]}`;
 }
 function emailFromName(n: string, i: number) {
   return n.toLowerCase().replace(/[^a-z]/g, ".") + i + "@example.com";
+}
+function slugify(input: string) {
+  return input.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)+/g, "");
 }
 
 /* ---------------- seeds ---------------- */
@@ -94,34 +75,20 @@ export async function seedCandidatesIfEmpty() {
   if (count > 0) return;
 
   type CandidateStage = Candidate["stage"];
-
-  // ✅ use 'screening' (not 'screen')
   const stages: CandidateStage[] = [
-    "applied",
-    "screening",
-    "interview",
-    "offer",
-    "hired",
-    "rejected",
+    "applied", "screening", "interview", "offer", "hired", "rejected",
   ];
-  const tags = ["remote", "hybrid", "junior", "senior", "contract", "full-time"];
+  const tags = ["remote","hybrid","junior","senior","contract","full-time"];
 
   const batch: Candidate[] = [];
   const orderByStage: Record<CandidateStage, number> = {
-    applied: 0,
-    screening: 0,
-    interview: 0,
-    offer: 0,
-    hired: 0,
-    rejected: 0,
+    applied: 0, screening: 0, interview: 0, offer: 0, hired: 0, rejected: 0,
   };
 
   for (let i = 1; i <= 1000; i++) {
     const name = nameFromSeed(i);
     const stage = pick<CandidateStage>(stages);
-    const now =
-      Date.now() -
-      Math.floor(Math.random() * 1000 * 60 * 60 * 24 * 60); // last 60 days
+    const now = Date.now() - Math.floor(Math.random() * 1000 * 60 * 60 * 24 * 60);
 
     batch.push({
       id: uuid(),
@@ -138,7 +105,7 @@ export async function seedCandidatesIfEmpty() {
   await db.candidates.bulkAdd(batch);
 }
 
-/** Seed a handful of jobs for first-time visitors (Netlify, new origins, etc.) */
+/** Seed a handful of jobs for first-time visitors (Netlify/new origin). */
 export async function seedJobsIfEmpty() {
   const count = await db.jobs.count();
   if (count > 0) return;
@@ -160,7 +127,7 @@ export async function seedJobsIfEmpty() {
   const rows: Job[] = titles.map((t, i) => ({
     id: uuid(),
     title: t,
-    slug: t.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+    slug: slugify(`${t}-${i + 1}`), // make uniqueness explicit
     status: i === 3 ? "closed" : "open",
     tags: i % 2 ? ["remote"] : ["hybrid", "full-time"],
     order: i,
@@ -194,7 +161,6 @@ export async function seedAssessmentsIfEmpty() {
     updatedAt: now - i * 1_800_000,
   });
 
-  // Use a few existing candidates/jobs if present; otherwise fall back
   const candidates = await db.candidates.limit(6).toArray();
   const jobs = await db.jobs.limit(3).toArray();
 
