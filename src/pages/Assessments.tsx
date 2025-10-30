@@ -11,17 +11,37 @@ import {
 } from "../api/assessments";
 import { fetchCandidates } from "../api/candidates";
 import { fetchJobs } from "../api/jobs";
-import type { Assessment, AssessmentStatus, Candidate, Job } from "../types";
 
-const STATUSES: AssessmentStatus[] = ["draft","pending","sent","completed","expired","cancelled"];
+import type {
+  Assessment,
+  AssessmentStatus,
+  Candidate,
+  Job,
+  AssessmentsListResponse,
+  CandidatesListResponse,
+  JobsListResponse,
+} from "../types";
+
+const STATUSES: AssessmentStatus[] = [
+  "draft",
+  "pending",
+  "sent",
+  "completed",
+  "expired",
+  "cancelled",
+];
 
 function toInt(v: string | null, fallback: number) {
   const n = Number(v ?? "");
   return Number.isFinite(n) ? n : fallback;
 }
+
 function useDebounced<T>(value: T, ms = 300) {
   const [v, setV] = useState(value);
-  useEffect(() => { const t = setTimeout(() => setV(value), ms); return () => clearTimeout(t); }, [value, ms]);
+  useEffect(() => {
+    const t = setTimeout(() => setV(value), ms);
+    return () => clearTimeout(t);
+  }, [value, ms]);
   return v;
 }
 
@@ -30,14 +50,26 @@ export default function Assessments() {
   const [sp, setSp] = useSearchParams();
   const qc = useQueryClient();
 
+  // URL state
   const page = toInt(sp.get("page"), 1);
   const limit = toInt(sp.get("limit"), 20);
   const q = sp.get("q") ?? "";
   const status = (sp.get("status") as AssessmentStatus | "") ?? "";
 
-  const queryKey = useMemo(() => ["assessments", { page, limit, q, status }], [page, limit, q, status]);
+  const queryKey = useMemo(
+    () => ["assessments", { page, limit, q, status }],
+    [page, limit, q, status]
+  );
 
-  const { data, isLoading, isError, error, isFetching, refetch } = useQuery({
+  // MAIN LIST (v5: add generic, remove keepPreviousData)
+  const {
+    data,
+    isLoading,
+    isError,
+    error,
+    isFetching,
+    refetch,
+  } = useQuery<AssessmentsListResponse>({
     queryKey,
     queryFn: () =>
       fetchAssessments({
@@ -46,7 +78,6 @@ export default function Assessments() {
         q: q || undefined,
         status: status || undefined,
       }),
-    keepPreviousData: true,
     retry: 1,
   });
 
@@ -69,7 +100,7 @@ export default function Assessments() {
     setSp(next, { replace: true });
   }
 
-  // Create modal
+  // Create modal state
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [candidateQuery, setCandidateQuery] = useState("");
@@ -81,18 +112,19 @@ export default function Assessments() {
   const debCand = useDebounced(candidateQuery, 350);
   const debJob = useDebounced(jobQuery, 350);
 
-  const candList = useQuery({
+  // MINI LISTS (v5: add generics, remove keepPreviousData)
+  const candList = useQuery<CandidatesListResponse>({
     queryKey: ["cand-mini", { q: debCand }],
-    queryFn: () => fetchCandidates({ page: 1, limit: 20, q: debCand || undefined }),
-    keepPreviousData: true,
+    queryFn: () =>
+      fetchCandidates({ page: 1, limit: 20, q: debCand || undefined }),
   });
 
-  const jobList = useQuery({
+  const jobList = useQuery<JobsListResponse>({
     queryKey: ["job-mini", { q: debJob }],
     queryFn: () => fetchJobs({ page: 1, limit: 20, q: debJob || undefined }),
-    keepPreviousData: true,
   });
 
+  // Create Assessment
   const createMut = useMutation({
     mutationFn: () =>
       createAssessment({
@@ -114,24 +146,34 @@ export default function Assessments() {
     },
   });
 
+  // Inline row update (status/title/etc.)
   const rowMut = useMutation({
     mutationFn: (payload: { id: string; patch: Partial<Assessment> }) =>
       updateAssessment(payload.id, payload.patch),
     onMutate: async ({ id, patch }) => {
       await qc.cancelQueries({ queryKey });
-      const prev = qc.getQueryData<{ data: Assessment[]; total: number }>(queryKey);
+      const prev = qc.getQueryData<AssessmentsListResponse>(queryKey);
       if (prev?.data) {
-        const next = prev.data.map((a) => (a.id === id ? { ...a, ...patch, updatedAt: Date.now() } : a));
+        const next = prev.data.map((a) =>
+          a.id === id ? { ...a, ...patch, updatedAt: Date.now() } : a
+        );
         qc.setQueryData(queryKey, { ...prev, data: next });
       }
       return { prev };
     },
-    onError: (_err, _vars, ctx) => { if (ctx?.prev) qc.setQueryData(queryKey, ctx.prev); },
-    onSettled: () => { qc.invalidateQueries({ queryKey }); },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev) qc.setQueryData(queryKey, ctx.prev);
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey });
+    },
   });
 
   function sendNow(a: Assessment) {
-    rowMut.mutate({ id: a.id, patch: { status: "sent", scheduledAt: Date.now() } });
+    rowMut.mutate({
+      id: a.id,
+      patch: { status: "sent", scheduledAt: Date.now() },
+    });
   }
 
   return (
@@ -140,21 +182,42 @@ export default function Assessments() {
         <div>
           <h2 className="text-2xl font-semibold">Assessments</h2>
           <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-            List with search & status filter. Create and edit assessments; status changes are optimistic.
+            List with search & status filter. Create and edit assessments; status
+            changes are optimistic.
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {isFetching && <span className="text-xs text-gray-500 dark:text-gray-400">Updating…</span>}
+          {isFetching && (
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+              Updating…
+            </span>
+          )}
           <button
             className="rounded-lg px-3 py-2 text-sm border dark:border-gray-700"
             onClick={() => {
               // simple CSV export of current page
-              const headers = ["id","title","candidateId","jobId","status","scheduledAt","createdAt","updatedAt"];
-              const rows = (data?.data ?? []).map(r => ({
+              const headers = [
+                "id",
+                "title",
+                "candidateId",
+                "jobId",
+                "status",
+                "scheduledAt",
+                "createdAt",
+                "updatedAt",
+              ];
+              const rows = (data?.data ?? []).map((r: Assessment) => ({
                 ...r,
                 scheduledAt: r.scheduledAt ?? "",
               }));
-              const csv = [headers.join(","), ...rows.map(r => headers.map(h => JSON.stringify((r as any)[h] ?? "")).join(","))].join("\n");
+              const csv = [
+                headers.join(","),
+                ...rows.map((r) =>
+                  headers
+                    .map((h) => JSON.stringify((r as any)[h] ?? ""))
+                    .join(",")
+                ),
+              ].join("\n");
               const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
               const a = document.createElement("a");
               a.href = URL.createObjectURL(blob);
@@ -190,7 +253,9 @@ export default function Assessments() {
         >
           <option value="">All statuses</option>
           {STATUSES.map((s) => (
-            <option key={s} value={s}>{s}</option>
+            <option key={s} value={s}>
+              {s}
+            </option>
           ))}
         </select>
         <select
@@ -205,11 +270,18 @@ export default function Assessments() {
         <div />
       </div>
 
-      {isLoading && <p className="mt-6 text-gray-500 dark:text-gray-400">Loading assessments…</p>}
+      {isLoading && (
+        <p className="mt-6 text-gray-500 dark:text-gray-400">
+          Loading assessments…
+        </p>
+      )}
       {isError && (
         <div className="mt-6">
           <p className="text-red-600">Error: {(error as Error).message}</p>
-          <button onClick={() => refetch()} className="mt-2 rounded-lg px-3 py-1 text-sm bg-black text-white dark:bg-white dark:text-black">
+          <button
+            onClick={() => refetch()}
+            className="mt-2 rounded-lg px-3 py-1 text-sm bg-black text-white dark:bg-white dark:text-black"
+          >
             Retry
           </button>
         </div>
@@ -219,7 +291,8 @@ export default function Assessments() {
         <>
           <div className="mt-6 flex items-center justify-between">
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              Showing <span className="font-medium">{start}</span>–<span className="font-medium">{end}</span> of{" "}
+              Showing <span className="font-medium">{start}</span>–
+              <span className="font-medium">{end}</span> of{" "}
               <span className="font-medium">{total}</span>
             </p>
             <div className="flex items-center gap-2">
@@ -246,33 +319,58 @@ export default function Assessments() {
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <div className="font-medium truncate">
-                      <Link to={`/assessments/${a.id}`} className="hover:underline">
+                      <Link
+                        to={`/assessments/${a.id}`}
+                        className="hover:underline"
+                      >
                         {a.title}
                       </Link>{" "}
-                      <span className="text-gray-500 dark:text-gray-400">· candidate: {a.candidateId}</span>
-                      {a.jobId && <span className="text-gray-500 dark:text-gray-400"> · job: {a.jobId}</span>}
+                      <span className="text-gray-500 dark:text-gray-400">
+                        · candidate: {a.candidateId}
+                      </span>
+                      {a.jobId && (
+                        <span className="text-gray-500 dark:text-gray-400">
+                          {" "}
+                          · job: {a.jobId}
+                        </span>
+                      )}
                     </div>
                     <div className="text-xs text-gray-500 dark:text-gray-400">
-                      created: {new Date(a.createdAt).toLocaleString()} · updated: {new Date(a.updatedAt).toLocaleString()}
+                      created: {new Date(a.createdAt).toLocaleString()} ·
+                      updated: {new Date(a.updatedAt).toLocaleString()}
                     </div>
                     <div className="text-xs text-gray-500 dark:text-gray-400">
-                      scheduled: {a.scheduledAt ? new Date(a.scheduledAt).toLocaleString() : "—"}
+                      scheduled:{" "}
+                      {a.scheduledAt
+                        ? new Date(a.scheduledAt).toLocaleString()
+                        : "—"}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <select
                       className="rounded-lg border border-gray-300 px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-black/40 dark:bg-gray-800 dark:border-gray-700"
                       value={a.status}
-                      onChange={(e) => rowMut.mutate({ id: a.id, patch: { status: e.target.value as AssessmentStatus } })}
+                      onChange={(e) =>
+                        rowMut.mutate({
+                          id: a.id,
+                          patch: {
+                            status: e.target.value as AssessmentStatus,
+                          },
+                        })
+                      }
                     >
                       {STATUSES.map((s) => (
-                        <option key={s} value={s}>{s}</option>
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
                       ))}
                     </select>
                     <button
                       className="rounded-lg px-2 py-1 text-xs border border-gray-300 dark:border-gray-700"
                       onClick={() => sendNow(a)}
-                      disabled={a.status === "sent" || a.status === "completed"}
+                      disabled={
+                        a.status === "sent" || a.status === "completed"
+                      }
                       title="Set status to 'sent' and schedule now"
                     >
                       Send now
@@ -287,11 +385,20 @@ export default function Assessments() {
 
       {/* Create Assessment Modal */}
       {open && (
-        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+        >
           <div className="w-full max-w-xl rounded-2xl bg-white text-gray-900 p-6 shadow space-y-4 dark:bg-gray-900 dark:text-gray-100 dark:border dark:border-gray-700">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold">Create Assessment</h3>
-              <button className="text-sm text-gray-500 dark:text-gray-400" onClick={() => setOpen(false)}>✕</button>
+              <button
+                className="text-sm text-gray-500 dark:text-gray-400"
+                onClick={() => setOpen(false)}
+              >
+                ✕
+              </button>
             </div>
 
             <label className="block text-sm font-medium">
@@ -306,7 +413,9 @@ export default function Assessments() {
 
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
-                <label className="block text-sm font-medium">Candidate (search name/email)</label>
+                <label className="block text-sm font-medium">
+                  Candidate (search name/email)
+                </label>
                 <input
                   className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black/50 dark:bg-gray-800 dark:border-gray-700"
                   placeholder="Type to search…"
@@ -320,7 +429,9 @@ export default function Assessments() {
                   onChange={(e) => setSelectedCandidateId(e.target.value)}
                 >
                   {(candList.data?.data ?? []).map((c: Candidate) => (
-                    <option key={c.id} value={c.id}>{c.name} — {c.email}</option>
+                    <option key={c.id} value={c.id}>
+                      {c.name} — {c.email}
+                    </option>
                   ))}
                 </select>
                 <div className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
@@ -329,7 +440,9 @@ export default function Assessments() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium">Job (optional, search title)</label>
+                <label className="block text-sm font-medium">
+                  Job (optional, search title)
+                </label>
                 <input
                   className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black/50 dark:bg-gray-800 dark:border-gray-700"
                   placeholder="Type to search…"
@@ -344,7 +457,9 @@ export default function Assessments() {
                 >
                   <option value="">(No job)</option>
                   {(jobList.data?.data ?? []).map((j: Job) => (
-                    <option key={j.id} value={j.id}>{j.title} — {j.status}</option>
+                    <option key={j.id} value={j.id}>
+                      {j.title} — {j.status}
+                    </option>
                   ))}
                 </select>
                 <div className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
@@ -362,21 +477,29 @@ export default function Assessments() {
                 onChange={(e) => setScheduleAt(e.target.value)}
               />
               <div className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
-                If set, initial status will be <b>pending</b>; otherwise it’s <b>draft</b>.
+                If set, initial status will be <b>pending</b>; otherwise it’s{" "}
+                <b>draft</b>.
               </div>
             </label>
 
             {createMut.isError && (
-              <div className="text-xs text-red-600">{(createMut.error as Error).message}</div>
+              <div className="text-xs text-red-600">
+                {(createMut.error as Error).message}
+              </div>
             )}
 
             <div className="flex items-center justify-end gap-2 pt-2">
-              <button className="rounded-lg px-3 py-2 text-sm border dark:border-gray-700" onClick={() => setOpen(false)}>
+              <button
+                className="rounded-lg px-3 py-2 text-sm border dark:border-gray-700"
+                onClick={() => setOpen(false)}
+              >
                 Cancel
               </button>
               <button
                 className="rounded-lg px-3 py-2 text-sm bg-black text-white disabled:opacity-50 dark:bg-white dark:text-black"
-                disabled={!title.trim() || !selectedCandidateId || createMut.isPending}
+                disabled={
+                  !title.trim() || !selectedCandidateId || createMut.isPending
+                }
                 onClick={() => createMut.mutate()}
               >
                 {createMut.isPending ? "Creating…" : "Create"}

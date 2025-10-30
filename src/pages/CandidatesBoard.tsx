@@ -7,7 +7,7 @@ import {
   moveCandidateStage,
   reorderCandidatesWithinStage,
 } from "../api/candidates";
-import type { Candidate } from "../types";
+import type { Candidate, CandidatesListResponse } from "../types";
 import {
   DragDropContext,
   Droppable,
@@ -15,28 +15,32 @@ import {
   type DropResult,
 } from "@hello-pangea/dnd";
 
-const STAGES = ["applied", "screening", "interview", "offer", "hired", "rejected"];
+// IMPORTANT: keep in sync with CandidateStage type (uses "screen", not "screening")
+const STAGES = ["applied", "screen", "interview", "offer", "hired", "rejected"] as const;
 
 export default function CandidatesBoard() {
   const qc = useQueryClient();
   const [errMsg, setErrMsg] = useState<string | null>(null);
 
   const queryKey = useMemo(() => ["candidatesBoard"], []);
-  const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
-    queryKey,
-    queryFn: () => fetchCandidates({ page: 1, limit: 1000 }),
-    keepPreviousData: true,
-    retry: 1,
-  });
 
+  const { data, isLoading, isError, error, refetch, isFetching } =
+    useQuery<CandidatesListResponse>({
+      queryKey,
+      queryFn: () => fetchCandidates({ page: 1, limit: 1000 }),
+      retry: 1,
+    });
+
+  // Build stage groups (always return all keys)
   const groups = useMemo(() => {
     const g: Record<string, Candidate[]> = STAGES.reduce((acc, k) => {
       acc[k] = [];
       return acc;
     }, {} as Record<string, Candidate[]>);
+
     if (data?.data) {
       for (const c of data.data) {
-        const k = STAGES.includes(c.stage) ? c.stage : STAGES[0];
+        const k = (STAGES as readonly string[]).includes(c.stage) ? c.stage : STAGES[0];
         g[k].push(c);
       }
       STAGES.forEach((k) => g[k].sort((a, b) => a.order - b.order));
@@ -100,10 +104,20 @@ export default function CandidatesBoard() {
 
   const reorderMut = useMutation({
     mutationFn: reorderCandidatesWithinStage,
-    onMutate: async (vars) => {
+    // NOTE: destinationId can be undefined at type level; guard it.
+    onMutate: async (vars: {
+      sourceId: string;
+      destinationId?: string;
+      position: "before" | "after";
+    }) => {
       await qc.cancelQueries({ queryKey });
       const prev = qc.getQueryData<{ data: Candidate[]; total: number }>(queryKey);
       if (!prev?.data) return { prev };
+
+      if (!vars.destinationId) {
+        // Nothing to reorder against; just bail out without touching cache
+        return { prev };
+      }
 
       const src = prev.data.find((c) => c.id === vars.sourceId);
       if (!src) return { prev };
@@ -112,7 +126,7 @@ export default function CandidatesBoard() {
         prev,
         src.stage,
         vars.sourceId,
-        vars.destinationId,
+        vars.destinationId, // safe due to guard above
         vars.position
       );
       qc.setQueryData(queryKey, next);
@@ -140,6 +154,7 @@ export default function CandidatesBoard() {
       return acc;
     }, {} as Record<string, string[]>);
 
+    // Same-column reorder
     if (fromStage === toStage) {
       if (source.index === destination.index) return;
 
@@ -150,6 +165,8 @@ export default function CandidatesBoard() {
       );
 
       const destId = list[clampedDestIndex];
+      if (!destId) return; // GUARD: destinationId may be undefined
+
       const position = destination.index < source.index ? "before" : "after";
 
       reorderMut.mutate({
@@ -160,7 +177,10 @@ export default function CandidatesBoard() {
       return;
     }
 
+    // Cross-column move + then reorder into target
     const targetList = idsByStage[toStage];
+
+    // If target column is empty, just move
     if (targetList.length === 0) {
       moveMut.mutate({ id: draggableId, stage: toStage });
       return;
@@ -178,6 +198,7 @@ export default function CandidatesBoard() {
     }
 
     const destinationId = targetList[Math.max(0, Math.min(targetIndex, targetList.length - 1))];
+    if (!destinationId) return; // GUARD
 
     moveMut.mutate({ id: draggableId, stage: toStage });
     reorderMut.mutate({ sourceId: draggableId, destinationId, position });
@@ -208,7 +229,10 @@ export default function CandidatesBoard() {
       {isError && (
         <div className="mt-6">
           <p className="text-red-600">Error: {(error as Error).message}</p>
-          <button onClick={() => refetch()} className="mt-2 rounded-lg px-3 py-1 text-sm bg-black text-white dark:bg-white dark:text-black">
+          <button
+            onClick={() => refetch()}
+            className="mt-2 rounded-lg px-3 py-1 text-sm bg-black text-white dark:bg-white dark:text-black"
+          >
             Retry
           </button>
         </div>

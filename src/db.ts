@@ -47,81 +47,49 @@ class AppDB extends Dexie {
 export const db = new AppDB();
 
 /* ---------------- helpers ---------------- */
-function uuid() {
-  // @ts-expect-error crypto may be undefined in some envs
-  return typeof crypto !== "undefined" && crypto.randomUUID
-    ? crypto.randomUUID()
-    : Math.random().toString(36).slice(2) + Date.now().toString(36);
+// ---- helpers ----
+function uuid(): string {
+  return globalThis.crypto?.randomUUID?.() ??
+    (Math.random().toString(36).slice(2) + Date.now().toString(36));
 }
-function pick<T>(arr: T[]) {
+function pick<T>(arr: readonly T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 function nameFromSeed(i: number) {
-  const first = [
-    "Alex",
-    "Taylor",
-    "Jordan",
-    "Casey",
-    "Morgan",
-    "Sam",
-    "Riley",
-    "Jamie",
-    "Avery",
-    "Quinn",
-  ];
-  const last = [
-    "Lee",
-    "Patel",
-    "Garcia",
-    "Nguyen",
-    "Kim",
-    "Lopez",
-    "Brown",
-    "Khan",
-    "Singh",
-    "Chen",
-  ];
+  const first = ["Alex","Taylor","Jordan","Casey","Morgan","Sam","Riley","Jamie","Avery","Quinn"];
+  const last = ["Lee","Patel","Garcia","Nguyen","Kim","Lopez","Brown","Khan","Singh","Chen"];
   return `${first[i % first.length]} ${last[i % last.length]}`;
 }
 function emailFromName(n: string, i: number) {
   return n.toLowerCase().replace(/[^a-z]/g, ".") + i + "@example.com";
 }
 
+
 /* ---------------- seeds ---------------- */
 
 /** Seed ~1000 candidates across stages on first need */
+
+
+  /** Seed ~1000 candidates across stages on first need */
 export async function seedCandidatesIfEmpty() {
   const count = await db.candidates.count();
   if (count > 0) return;
 
-  // IMPORTANT: align with UI/handlers
-  const stages = [
-    "applied",
-    "screening",
-    "interview",
-    "offer",
-    "hired",
-    "rejected",
-  ] as const;
+  type CandidateStage = Candidate["stage"];
 
-  const tags = ["remote", "hybrid", "junior", "senior", "contract", "full-time"];
+  const stages: CandidateStage[] = ["applied","screen","interview","offer","hired","rejected"];
+  const tags = ["remote","hybrid","junior","senior","contract","full-time"];
 
   const batch: Candidate[] = [];
-  const orderByStage: Record<string, number> = {
-    applied: 0,
-    screening: 0,
-    interview: 0,
-    offer: 0,
-    hired: 0,
-    rejected: 0,
+  const orderByStage: Record<CandidateStage, number> = {
+    applied: 0, screen: 0, interview: 0, offer: 0, hired: 0, rejected: 0,
   };
 
   for (let i = 1; i <= 1000; i++) {
     const name = nameFromSeed(i);
-    const stage = pick(stages);
-    const now =
-      Date.now() -
-      Math.floor(Math.random() * 1000 * 60 * 60 * 24 * 60); // random last 60 days
+    const stage = pick<CandidateStage>(stages);
+    const now = Date.now() - Math.floor(Math.random() * 1000 * 60 * 60 * 24 * 60);
+
     batch.push({
       id: uuid(),
       name,
@@ -136,6 +104,9 @@ export async function seedCandidatesIfEmpty() {
 
   await db.candidates.bulkAdd(batch);
 }
+
+
+  
 
 /** Seed a handful of assessments */
 export async function seedAssessmentsIfEmpty() {

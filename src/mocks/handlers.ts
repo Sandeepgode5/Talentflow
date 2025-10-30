@@ -1,11 +1,10 @@
 // src/mocks/handlers.ts
 import { http, HttpResponse, delay } from "msw";
-
-
+import { db, seedCandidatesIfEmpty } from "../db";
 import type { Job, JobsListResponse } from "../types";
 import type { Assessment, AssessmentsListResponse, AssessmentStatus } from "../types";
-// src/mocks/handlers.ts
-import { db, seedCandidatesIfEmpty, seedAssessmentsIfEmpty } from "../db";
+
+
 
 
 
@@ -22,7 +21,7 @@ function slugify(input: string) {
   return input.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)+/g, "");
 }
 function uuid() {
-  // @ts-expect-error - crypto may be undefined in some environments
+  
   return typeof crypto !== "undefined" && crypto.randomUUID
     ? crypto.randomUUID()
     : Math.random().toString(36).slice(2) + Date.now().toString(36);
@@ -564,6 +563,7 @@ http.post("/api/candidates/:id/notes", async ({ params, request }) => {
     id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2),
     candidateId,
     body: text,
+    author: "Recruiter",
     createdAt: Date.now(),
   };
   await db.candidateNotes.add(note);

@@ -1,6 +1,7 @@
 // src/components/ui/ThemeToggle.tsx
 import { useEffect, useState } from "react";
-import { getInitialTheme, toggleTheme } from "../../lib/theme";
+import { toggleTheme } from "../../lib/theme";
+
 
 export default function ThemeToggle() {
   const [isDark, setIsDark] = useState<boolean>(false);

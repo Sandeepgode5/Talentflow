@@ -12,6 +12,7 @@ import {
   Draggable,
   type DropResult,
 } from "@hello-pangea/dnd";
+import type { Job, JobsListResponse } from "../types";
 
 function toInt(v: string | null, fallback: number) {
   const n = Number(v ?? "");
@@ -52,7 +53,7 @@ export default function Jobs() {
     [page, limit, q, status, tag]
   );
 
-  const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
+  const { data, isLoading, isError, error, refetch, isFetching } = useQuery<JobsListResponse>({
     queryKey,
     queryFn: () =>
       fetchJobs({
@@ -62,7 +63,6 @@ export default function Jobs() {
         status: status || undefined,
         tag: tag || undefined,
       }),
-    keepPreviousData: true,
     retry: 1,
   });
 
@@ -100,16 +100,19 @@ export default function Jobs() {
     mutationFn: ({ id, archived }: { id: string; archived: boolean }) => setArchive(id, archived),
     onMutate: async ({ id, archived }) => {
       await qc.cancelQueries({ queryKey: ["jobs"] });
-      const prev = qc.getQueriesData({ queryKey: ["jobs"] });
 
+      // Optimistically update all cached job lists
+      const prev = qc.getQueriesData({ queryKey: ["jobs"] });
       prev.forEach(([key, value]) => {
-        if (!value || typeof value !== "object") return;
-        const v = value as { data?: any[]; total?: number };
-        if (!v.data) return;
-        v.data = v.data.map((j: any) =>
-          j.id === id ? { ...j, status: archived ? "archived" : "open" } : j
-        );
-        qc.setQueryData(key as any, { ...v });
+        const v = value as JobsListResponse | undefined;
+        if (!v?.data) return;
+        const next: JobsListResponse = {
+          ...v,
+          data: v.data.map((j) =>
+            j.id === id ? { ...j, status: archived ? "archived" : "open" } : j
+          ),
+        };
+        qc.setQueryData(key as any, next);
       });
 
       return { prev };
@@ -130,7 +133,7 @@ export default function Jobs() {
     mutationFn: reorderJob,
     onMutate: async (vars) => {
       await qc.cancelQueries({ queryKey });
-      const prev = qc.getQueryData<any>(queryKey);
+      const prev = qc.getQueryData<JobsListResponse>(queryKey);
 
       if (prev?.data) {
         const items = [...prev.data];
@@ -138,7 +141,8 @@ export default function Jobs() {
         const to = items.findIndex((j) => j.id === vars.destinationId);
         if (from !== -1 && to !== -1) {
           const [moved] = items.splice(from, 1);
-          const insertIndex = vars.position === "after" ? to + (from < to ? 0 : 1) : to + (from < to ? -1 : 0);
+          const insertIndex =
+            vars.position === "after" ? to + (from < to ? 0 : 1) : to + (from < to ? -1 : 0);
           items.splice(Math.max(0, insertIndex), 0, moved);
           qc.setQueryData(queryKey, { ...prev, data: items });
         }
@@ -181,7 +185,7 @@ export default function Jobs() {
   function onExport() {
     if (!data?.data) return;
     const headers = ["id", "title", "slug", "status", "tags", "order", "createdAt", "updatedAt"];
-    const rows = data.data.map((j: any) => ({
+    const rows = data.data.map((j: Job) => ({
       ...j,
       tags: (j.tags || []).join("|"),
     }));
@@ -207,18 +211,21 @@ export default function Jobs() {
         </div>
         <div className="flex items-center gap-2">
           {isFetching && <span className="muted">Updating…</span>}
-          <button 
+          <button
             data-hotkey="export"
-            className="btn" onClick={onExport} title="Export current results to CSV">
+            className="btn"
+            onClick={onExport}
+            title="Export current results to CSV"
+          >
             Export CSV
           </button>
-          <button 
-            data-hotkey="new" 
-            className="btn-primary" onClick={() => setOpen(true)}>
+          <button
+            data-hotkey="new"
+            className="btn-primary"
+            onClick={() => setOpen(true)}
+          >
             + New Job
           </button>
-          
-
         </div>
       </div>
 
@@ -293,7 +300,11 @@ export default function Jobs() {
           <DragDropContext onDragEnd={onDragEnd}>
             <Droppable droppableId="jobs">
               {(provided) => (
-                <ul className="mt-3 divide-y divide-gray-200 dark:divide-gray-800" ref={provided.innerRef} {...provided.droppableProps}>
+                <ul
+                  className="mt-3 divide-y divide-gray-200 dark:divide-gray-800"
+                  ref={provided.innerRef}
+                  {...provided.droppableProps}
+                >
                   {data.data.map((job, index) => (
                     <Draggable key={job.id} draggableId={job.id} index={index}>
                       {(p, snapshot) => (
@@ -321,7 +332,9 @@ export default function Jobs() {
                               <span className="chip">order {job.order}</span>
                               <button
                                 className="btn text-xs"
-                                onClick={() => archiveMut.mutate({ id: job.id, archived: job.status !== "archived" })}
+                                onClick={() =>
+                                  archiveMut.mutate({ id: job.id, archived: job.status !== "archived" })
+                                }
                               >
                                 {job.status === "archived" ? "Unarchive" : "Archive"}
                               </button>

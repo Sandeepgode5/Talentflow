@@ -4,11 +4,8 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import useHotkeys from "../hooks/useHotkeys";
 
-import {
-  fetchCandidates,
-  moveCandidateStage,
-  type Candidate,
-} from "../api/candidates";
+import { fetchCandidates, moveCandidateStage } from "../api/candidates";
+import type { Candidate, CandidatesListResponse } from "../types";
 import { downloadCsv } from "../lib/download";
 
 function toInt(v: string | null, fallback: number) {
@@ -35,7 +32,7 @@ export default function Candidates() {
     [page, limit, q, stageFilter]
   );
 
-  const { data, isLoading, isError, error, isFetching, refetch } = useQuery({
+  const { data, isLoading, isError, error, isFetching, refetch } = useQuery<CandidatesListResponse>({
     queryKey,
     queryFn: () =>
       fetchCandidates({
@@ -44,7 +41,6 @@ export default function Candidates() {
         q: q || undefined,
         stage: stageFilter || undefined,
       }),
-    keepPreviousData: true,
     retry: 1,
   });
 
@@ -64,16 +60,13 @@ export default function Candidates() {
   // --- Optimistic stage change ---
   const [stageError, setStageError] = useState<string | null>(null);
   const stageMut = useMutation({
-    mutationFn: ({ id, stage }: { id: string; stage: string }) =>
-      moveCandidateStage(id, stage),
+    mutationFn: ({ id, stage }: { id: string; stage: string }) => moveCandidateStage(id, stage),
     onMutate: async ({ id, stage }) => {
       await qc.cancelQueries({ queryKey });
 
-      const prev = qc.getQueryData<{ data: Candidate[]; total: number }>(queryKey);
+      const prev = qc.getQueryData<CandidatesListResponse>(queryKey);
       if (prev?.data) {
-        const copy = prev.data.map((c) =>
-          c.id === id ? { ...c, stage } : c
-        );
+        const copy = prev.data.map((c) => (c.id === id ? { ...c, stage } : c));
         qc.setQueryData(queryKey, { ...prev, data: copy });
       }
       return { prev };
@@ -154,14 +147,10 @@ export default function Candidates() {
           <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
             Virtualized list (1,000+) with search &amp; stage filter. Kanban and profile pages are next.
           </p>
-          {stageError && (
-            <div className="mt-2 text-xs text-red-600">{stageError}</div>
-          )}
+          {stageError && <div className="mt-2 text-xs text-red-600">{stageError}</div>}
         </div>
         <div className="flex items-center gap-2">
-          {isFetching && (
-            <span className="text-xs text-gray-500 dark:text-gray-400">Updating…</span>
-          )}
+          {isFetching && <span className="text-xs text-gray-500 dark:text-gray-400">Updating…</span>}
           <button
             data-hotkey="export"
             className="rounded-lg px-3 py-2 text-sm border border-gray-300 hover:bg-gray-50 disabled:opacity-50
