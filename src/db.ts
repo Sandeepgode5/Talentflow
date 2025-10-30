@@ -76,13 +76,13 @@ export async function seedCandidatesIfEmpty() {
 
   type CandidateStage = Candidate["stage"];
   const stages: CandidateStage[] = [
-    "applied", "screening", "interview", "offer", "hired", "rejected",
+    "applied", "screen", "interview", "offer", "hired", "rejected",
   ];
   const tags = ["remote","hybrid","junior","senior","contract","full-time"];
 
   const batch: Candidate[] = [];
   const orderByStage: Record<CandidateStage, number> = {
-    applied: 0, screening: 0, interview: 0, offer: 0, hired: 0, rejected: 0,
+    applied: 0, screen: 0, interview: 0, offer: 0, hired: 0, rejected: 0,
   };
 
   for (let i = 1; i <= 1000; i++) {
