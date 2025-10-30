@@ -12,12 +12,12 @@ class AppDB extends Dexie {
   jobs!: Table<Job, string>;
   candidates!: Table<Candidate, string>;
   candidateNotes!: Table<CandidateNote, string>;
-  assessments!: Table<Assessment, string>; // NEW
+  assessments!: Table<Assessment, string>;
 
   constructor() {
     super("talentflow-db");
 
-    // v2 (your existing schema)
+    // v2 (legacy)
     this.version(2).stores({
       jobs: "id, slug, status, order",
       candidates: "id, email, stage, order",
@@ -33,7 +33,6 @@ class AppDB extends Dexie {
         assessments: "id, status, candidateId, jobId, createdAt, updatedAt",
       })
       .upgrade(async (tx) => {
-        // Normalize legacy stage value
         await tx
           .table("candidates")
           .toCollection()
@@ -47,48 +46,82 @@ class AppDB extends Dexie {
 export const db = new AppDB();
 
 /* ---------------- helpers ---------------- */
-// ---- helpers ----
 function uuid(): string {
-  return globalThis.crypto?.randomUUID?.() ??
-    (Math.random().toString(36).slice(2) + Date.now().toString(36));
+  return (
+    globalThis.crypto?.randomUUID?.() ??
+    Math.random().toString(36).slice(2) + Date.now().toString(36)
+  );
 }
 function pick<T>(arr: readonly T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 function nameFromSeed(i: number) {
-  const first = ["Alex","Taylor","Jordan","Casey","Morgan","Sam","Riley","Jamie","Avery","Quinn"];
-  const last = ["Lee","Patel","Garcia","Nguyen","Kim","Lopez","Brown","Khan","Singh","Chen"];
+  const first = [
+    "Alex",
+    "Taylor",
+    "Jordan",
+    "Casey",
+    "Morgan",
+    "Sam",
+    "Riley",
+    "Jamie",
+    "Avery",
+    "Quinn",
+  ];
+  const last = [
+    "Lee",
+    "Patel",
+    "Garcia",
+    "Nguyen",
+    "Kim",
+    "Lopez",
+    "Brown",
+    "Khan",
+    "Singh",
+    "Chen",
+  ];
   return `${first[i % first.length]} ${last[i % last.length]}`;
 }
 function emailFromName(n: string, i: number) {
   return n.toLowerCase().replace(/[^a-z]/g, ".") + i + "@example.com";
 }
 
-
 /* ---------------- seeds ---------------- */
 
 /** Seed ~1000 candidates across stages on first need */
-
-
-  /** Seed ~1000 candidates across stages on first need */
 export async function seedCandidatesIfEmpty() {
   const count = await db.candidates.count();
   if (count > 0) return;
 
   type CandidateStage = Candidate["stage"];
 
-  const stages: CandidateStage[] = ["applied","screen","interview","offer","hired","rejected"];
-  const tags = ["remote","hybrid","junior","senior","contract","full-time"];
+  // ✅ use 'screening' (not 'screen')
+  const stages: CandidateStage[] = [
+    "applied",
+    "screening",
+    "interview",
+    "offer",
+    "hired",
+    "rejected",
+  ];
+  const tags = ["remote", "hybrid", "junior", "senior", "contract", "full-time"];
 
   const batch: Candidate[] = [];
   const orderByStage: Record<CandidateStage, number> = {
-    applied: 0, screen: 0, interview: 0, offer: 0, hired: 0, rejected: 0,
+    applied: 0,
+    screening: 0,
+    interview: 0,
+    offer: 0,
+    hired: 0,
+    rejected: 0,
   };
 
   for (let i = 1; i <= 1000; i++) {
     const name = nameFromSeed(i);
     const stage = pick<CandidateStage>(stages);
-    const now = Date.now() - Math.floor(Math.random() * 1000 * 60 * 60 * 24 * 60);
+    const now =
+      Date.now() -
+      Math.floor(Math.random() * 1000 * 60 * 60 * 24 * 60); // last 60 days
 
     batch.push({
       id: uuid(),
@@ -105,8 +138,38 @@ export async function seedCandidatesIfEmpty() {
   await db.candidates.bulkAdd(batch);
 }
 
+/** Seed a handful of jobs for first-time visitors (Netlify, new origins, etc.) */
+export async function seedJobsIfEmpty() {
+  const count = await db.jobs.count();
+  if (count > 0) return;
 
-  
+  const now = Date.now();
+  const titles = [
+    "Frontend Engineer 1",
+    "Backend Engineer 2",
+    "Fullstack Developer 3",
+    "Data Engineer 4",
+    "ML Engineer 5",
+    "QA Engineer 6",
+    "DevOps Engineer 7",
+    "Android Engineer 8",
+    "iOS Engineer 9",
+    "Product Designer 10",
+  ];
+
+  const rows: Job[] = titles.map((t, i) => ({
+    id: uuid(),
+    title: t,
+    slug: t.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+    status: i === 3 ? "closed" : "open",
+    tags: i % 2 ? ["remote"] : ["hybrid", "full-time"],
+    order: i,
+    createdAt: now - (titles.length - i) * 3_600_000,
+    updatedAt: now - (titles.length - i) * 3_600_000,
+  }));
+
+  await db.jobs.bulkAdd(rows);
+}
 
 /** Seed a handful of assessments */
 export async function seedAssessmentsIfEmpty() {
@@ -126,9 +189,9 @@ export async function seedAssessmentsIfEmpty() {
     candidateId,
     jobId,
     status,
-    scheduledAt: status === "draft" ? null : now - i * 3600_000,
-    createdAt: now - i * 7200_000,
-    updatedAt: now - i * 1800_000,
+    scheduledAt: status === "draft" ? null : now - i * 3_600_000,
+    createdAt: now - i * 7_200_000,
+    updatedAt: now - i * 1_800_000,
   });
 
   // Use a few existing candidates/jobs if present; otherwise fall back
