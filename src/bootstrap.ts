@@ -1,37 +1,42 @@
 // src/bootstrap.ts
-// Opens IndexedDB, runs available seeders in a safe order, then starts MSW in dev.
+// Open IndexedDB (if present), seed mock data (if seeders exist), then start MSW.
+// We start MSW in BOTH dev and production so Netlify has working /api/* mocks.
 
 import * as DB from "./db";
 
-(async function start() {
-  // 1) Open DB if exported
-  if (DB && (DB as any).db && typeof (DB as any).db.open === "function") {
-    await (DB as any).db.open();
+async function maybeStartMSW() {
+  // Only in the browser
+  if (typeof window === "undefined") return;
+
+  const { worker } = await import("./mocks/browser");
+  await worker.start({
+    // ensure Netlify serves the committed SW file
+    serviceWorker: { url: "/mockServiceWorker.js" },
+    onUnhandledRequest: "bypass",
+  });
+}
+
+(async () => {
+  // 1) Open DB if this project exposes it
+  const anyDB = DB as any;
+  if (anyDB?.db?.open && typeof anyDB.db.open === "function") {
+    try {
+      await anyDB.db.open();
+    } catch {
+      // ignore if DB not needed
+    }
   }
 
-  // 2) Seed in sensible order: candidates → jobs → assessments
+  // 2) Seed in a sensible order (only if the functions exist)
   const seeders: Array<() => Promise<unknown>> = [];
-
-  if (typeof (DB as any).seedCandidatesIfEmpty === "function") {
-    seeders.push((DB as any).seedCandidatesIfEmpty);
-  }
-  if (typeof (DB as any).seedJobsIfEmpty === "function") {
-    seeders.push((DB as any).seedJobsIfEmpty);
-  }
-  if (typeof (DB as any).seedAssessmentsIfEmpty === "function") {
-    seeders.push((DB as any).seedAssessmentsIfEmpty);
-  }
+  if (typeof anyDB.seedCandidatesIfEmpty === "function") seeders.push(anyDB.seedCandidatesIfEmpty);
+  if (typeof anyDB.seedJobsIfEmpty === "function")       seeders.push(anyDB.seedJobsIfEmpty);
+  if (typeof anyDB.seedAssessmentsIfEmpty === "function") seeders.push(anyDB.seedAssessmentsIfEmpty);
 
   for (const seed of seeders) {
-    await seed();
+    try { await seed(); } catch { /* ignore */ }
   }
 
-  // 3) Start MSW in dev so /api/* is intercepted
-  if (import.meta.env.DEV) {
-    const { worker } = await import("./mocks/browser");
-    await worker.start({
-      serviceWorker: { url: "/mockServiceWorker.js" },
-      onUnhandledRequest: "bypass",
-    });
-  }
+  // 3) Start MSW (dev + prod) so API routes resolve everywhere
+  await maybeStartMSW();
 })();
