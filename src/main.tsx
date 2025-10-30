@@ -1,5 +1,5 @@
 // src/main.tsx
-import "./bootstrap";
+
 import { bootstrapReady } from "./bootstrap";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";

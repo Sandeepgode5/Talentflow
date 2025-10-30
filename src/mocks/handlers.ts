@@ -1,6 +1,7 @@
 // src/mocks/handlers.ts
 import { http, HttpResponse, delay } from "msw";
-import { db, seedCandidatesIfEmpty } from "../db";
+import { db, seedCandidatesIfEmpty, seedJobsIfEmpty } from "../db";
+
 import type { Job, JobsListResponse } from "../types";
 import type { Assessment, AssessmentsListResponse, AssessmentStatus } from "../types";
 
@@ -47,9 +48,15 @@ export const handlers = [
     const offset = (page - 1) * limit;
 
     let all = await db.jobs.orderBy("order").toArray();
+      // Safety net: if this is a brand-new origin, seed before responding
+    if ((await db.jobs.count()) === 0) {
+      await seedJobsIfEmpty();
+    }
+
     if (q) all = all.filter(j => includesInsensitive(j.title, q) || includesInsensitive(j.slug, q));
     if (status) all = all.filter(j => j.status === status);
-    if (tag) all = all.filter(j => j.tags.includes(tag));
+    if (tag) all = all.filter(j => (j.tags ?? []).includes(tag));
+
 
     const total = all.length;
     const data = all.slice(offset, offset + limit);
